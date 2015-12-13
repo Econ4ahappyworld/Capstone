@@ -1,0 +1,190 @@
+---
+title: "Capstone Milestone Report"
+author: "Timothy Wilson"
+date: "December 12, 2015"
+output: html_document
+---
+```{r, echo=FALSE}
+#setwd("C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/")
+```
+
+#Executive Summary
+This document provides a brief introduction to the data downloaded as part of the Coursera Capstone Course in partnership with Swiftkey. 
+It illustrates that the data has been downloaded, cleaned, explored and initial steps have been made to build a word prediction model. 
+  
+*Please note - since this report is intended to be written for a non-data specialist manager and to be as **succint as possible**, I have hidden most of the code.  If you would like to access the code, you can view the rmarkdown file on my github page here: https://github.com/Econ4ahappyworld/Capstone*
+
+
+#Objectives
+The objectives of this report are to:
+- Demonstrate that the data has been downloaded nad loaded;
+- provide summary statistics on the datasets;
+- report interesting findings arrived at so far;
+- generate feedback on my progress so far in creating a prediction algorithm and Shiny app.
+
+#Data
+The raw data sets are downloaded from the following link:
+https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip  
+These data sets are very large, so this RMarkdown document loads a previously downloaded version of the datasets that have been saved locally. 
+The datasets are saved in four folders, each corresponding to a specific country and language - Germany in German, United States in English, Finland in Finnish and Russia in Russian. 
+```{r,echo=FALSE}
+dir("C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/")
+```
+*Note that the sample folder is a folder I created for my analysis, all others are the raw data*
+  
+Each folder has three data sets relating to news, twitter and blogs.  
+I report the en_us folder as an example...
+```{r, echo = FALSE}
+dir("C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/en_US/")
+```
+  
+###File size
+As stated above, the size of each of these files is large.  Here is a list of the file size of the twelve different files.    
+```{r, echo = FALSE, warning=FALSE}
+file.size(c("C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/en_US/en_US.blogs.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/en_US/en_US.news.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/en_US/en_US.twitter.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/de_DE/de_DE.blogs.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/de_DE/de_DE.news.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/de_DE/de_DE.twitter.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/fi_FI/fi_FI.blogs.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/fi_FI/fi_FI.news.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/fi_FI/fi_FI.twitter.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/ru_RU/ru_RU.blogs.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/ru_RU/ru_RU.news.txt",
+            "C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/ru_RU/ru_RU.twitter.txt"))
+```
+To avoid repitition, and since the I have established that all folders contain the same type of files, I report the results of my further investigation and exploratory analysis only in respect of the folder containing english files from the United States of America.
+
+  
+```{r, eval=TRUE, echo=FALSE, warning=FALSE}
+#Loading the datasets
+#After trial and error, I found that the best way to load these datasets appears to be by establishing a connection and then using the binary mode of opening.
+#Note to reviewers - I do not know why this is, so any feedback would be very much appreciated!  thanks!
+con <- file("C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/en_US/en_US.blogs.txt", open = "rb" )
+blogs_raw <- readLines(con, encoding = "UTF-8")
+close(con)
+con <- file("C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/en_US/en_US.news.txt", open = "rb" )
+news_raw <- readLines(con, encoding = "UTF-8")
+close(con)
+con <- file("C:/Users/twilson/Desktop/R/R_Crse/000Capstone/Data/final/en_US/en_US.twitter.txt", open = "rb" )
+twitter_raw <- readLines(con, encoding = "UTF-8")
+close(con)
+rm(con)
+```
+  
+###Line count  
+The number of lines in the United States english **blogs** text file is:  
+```{r, echo = FALSE}
+length(blogs_raw)
+```
+The number of lines in the United States english **news** text file is:  
+```{r, echo = FALSE}
+length(news_raw)
+```
+The number of lines in the United States english **twitter** text file is:  
+```{r, echo = FALSE, warning = FALSE}
+length(twitter_raw)
+```
+  
+#Exploratory data analysis  
+Since the data files are so big, we are going to take a one percent sample of each to conduct our exploratory analysis.
+We then combine them into a corpus.  Note that I tried using a larger sample (ten percent and five percent) but when it came to tokenization I ran out of memory. 
+```{r, echo= FALSE, warning=FALSE}
+set.seed(2)
+blogs_sample <- blogs_raw[as.logical(rbinom(length(blogs_raw),1,0.01))]
+blogs_sample <- iconv(blogs_sample,"latin1", "ASCII", sub="") #gets rid of characters that aren't english (as defined by ASCII categorisation).  I learnt by trial and error that this avoids difficulties later on when we tokenize the data.
+news_sample <- news_raw[as.logical(rbinom(length(news_raw),1,0.01))]
+news_sample <- iconv(news_sample,"latin1", "ASCII", sub="")
+twitter_sample <- twitter_raw[as.logical(rbinom(length(twitter_raw),1,0.01))]
+twitter_sample <- iconv(twitter_sample,"latin1", "ASCII", sub="")
+rm(blogs_raw) #to free up workspace
+rm(news_raw) #to free up workspace
+rm(twitter_raw) #to free up workspace
+library(tm)
+library(rJava)
+library(RWeka)
+en_US_corpus <- Corpus(VectorSource(list(c(blogs_sample,
+                                           news_sample,
+                                           twitter_sample))))
+```
+We now perform some basic data cleaning so that we can tokenize it and explore.
+```{r}
+en_US_corpus <- tm_map(en_US_corpus, stripWhitespace) #takes out the extra whitespace that we don't need
+en_US_corpus <- tm_map(en_US_corpus, content_transformer(tolower)) #Transforms all words to lower case
+en_US_corpus <- tm_map(en_US_corpus, removeWords, stopwords("english")) #removes stopwords.
+en_US_corpus <- tm_map(en_US_corpus, removeNumbers) #Removes numbersI subsequently learnt you have to do this or else numbers are by far the most common "word".
+en_US_corpus <- tm_map(en_US_corpus, removePunctuation)
+```  
+##Unigram analysis
+We first examine the word documents by looking at single words, in other words, a unigram analysis.
+```{r, echo=FALSE, warning=FALSE}
+UnigramTokenizer <- function(x) unlist(lapply(ngrams(words(x), 1), paste, collapse = " "), use.names = FALSE)
+
+en_US_TDM_1 <- TermDocumentMatrix(en_US_corpus, control=list(tokenize=UnigramTokenizer)) #Tokenization.  Note - this action can take some time.
+
+en_US_1_matrix <- as.matrix(en_US_TDM_1)
+v <- sort(rowSums(en_US_1_matrix),decreasing=TRUE)
+en_US_1_dataframe <- data.frame(word = names(v),freq=v)
+```
+  
+```{r, echo = FALSE, warning=FALSE}
+require(ggplot2)
+ggplot(head(en_US_1_dataframe), aes(x=reorder(word, -freq),
+                                    y=freq)) + 
+        geom_bar(stat="Identity", fill = "lightblue") + 
+        geom_text(aes(label=freq), vjust = 1) + 
+        ggtitle("Word frequency") +
+        ylab("Frequency") + 
+        xlab("Word")
+```
+
+We then perform analysis of two word strings, which is otherwise known as a bigram analysis.
+```{r, echo = FALSE, warning=FALSE}
+BigramTokenizer <- function(x) unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE)
+
+en_US_TDM_2 <- TermDocumentMatrix(en_US_corpus, control=list(tokenize=BigramTokenizer))
+
+en_US_2_matrix <- as.matrix(en_US_TDM_2)
+v <- sort(rowSums(en_US_2_matrix),decreasing=TRUE)
+en_US_2_dataframe <- data.frame(word = names(v),freq=v)
+```
+  
+```{r, echo=FALSE, warning=FALSE}
+ggplot(head(en_US_2_dataframe), aes(x=reorder(word, -freq),
+                                    y=freq)) + 
+        geom_bar(stat="Identity", fill = "lightblue") + 
+        geom_text(aes(label=freq), vjust = 1) + 
+        ggtitle("Bigram frequency") +
+        ylab("Frequency") + 
+        xlab("Bigrams")
+```
+
+
+Finally, we perform analysis of three words strings, which is otherwise known as a trigram analysis.  
+```{r, echo = FALSE, warning=FALSE}
+TrigramTokenizer <- function(x) unlist(lapply(ngrams(words(x), 3), paste, collapse = " "), use.names = FALSE)
+
+en_US_TDM_3 <- TermDocumentMatrix(en_US_corpus, control=list(tokenize=TrigramTokenizer))
+
+en_US_3_matrix <- as.matrix(en_US_TDM_3)
+v <- sort(rowSums(en_US_3_matrix),decreasing=TRUE)
+en_US_3_dataframe <- data.frame(word = names(v),freq=v)
+```
+  
+```{r, echo=FALSE, warning=FALSE}
+ggplot(head(en_US_3_dataframe), aes(x=reorder(word, -freq),
+                                    y=freq)) + 
+        geom_bar(stat="Identity", fill = "lightblue") + 
+        geom_text(aes(label=freq), vjust = 1) + 
+        ggtitle("Trigram frequency") +
+        ylab("Frequency") + 
+        xlab("Trigrams") + 
+        theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+#Next steps
+The ultimate goal of this work is to create a word prediction algorithm.  
+Therefore, the next steps are to build a prediction algorithm that uses the knowledge we have gained above to predict the next word. 
+At this stage, my plan is to build a tool (that will be launched online at the ShinyApps portal) that would take the words that the user has inputed, then calculate the most likely next word by using associations that we have calculated with the data above.  
